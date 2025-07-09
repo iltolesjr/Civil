@@ -22,6 +22,13 @@ class EmailTranscriber:
             'edith_property': [],
             'city_heat_complaints': [],
             'nick_matt_concepts26': []
+             'roommate_concepts26': []
+meth
+police assaulted me
+drug test
+put my stuff away
+my stuff is missing
+Richard nick text 
         }
         
         # Search keywords for each category
