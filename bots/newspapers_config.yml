@@ -1,0 +1,19 @@
+# Configure family search for the Newspapers Bot
+# Add names/phrases under queries. Optional filters: states, date1/date2 (years), max_results, create_issue.
+# State filter is a list of full state names as used by Chronicling America (e.g., "North Carolina", "Minnesota").
+
+queries:
+  - name: Ruby Powers Wood
+    phrase: "Ruby Powers Wood"
+    states: ["North Carolina", "Arkansas"]
+    date1: 1930
+    date2: 1960
+    max_results: 25
+    create_issue: true
+  - name: Mrs. Mack Johnson
+    phrase: "Mrs. Mack Johnson"
+    states: ["North Carolina", "Arkansas"]
+    date1: 1930
+    date2: 1960
+    max_results: 25
+    create_issue: true

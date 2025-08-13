@@ -1,0 +1,49 @@
+name: Build MCP EXEs (Windows)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'MCP CIVIL AGENT/**'
+      - '.github/workflows/build-exes.yml'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build deps
+        run: |
+          python -m pip install --upgrade pip wheel
+          python -m pip install pyinstaller
+          if (Test-Path 'MCP CIVIL AGENT/mcp_civil/requirements.txt') { pip install -r 'MCP CIVIL AGENT/mcp_civil/requirements.txt' }
+          if (Test-Path 'MCP CIVIL AGENT/mcp_genealogy/requirements.txt') { pip install -r 'MCP CIVIL AGENT/mcp_genealogy/requirements.txt' }
+
+      - name: Build mcp_civil.exe
+        run: pyinstaller --noconfirm --onefile --name mcp_civil 'MCP CIVIL AGENT/mcp_civil/app.py'
+
+      - name: Build mcp_genealogy.exe
+        run: pyinstaller --noconfirm --onefile --name mcp_genealogy 'MCP CIVIL AGENT/mcp_genealogy/app.py'
+
+      - name: Upload mcp_civil artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp_civil-windows
+          path: dist/mcp_civil.exe
+
+      - name: Upload mcp_genealogy artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp_genealogy-windows
+          path: dist/mcp_genealogy.exe

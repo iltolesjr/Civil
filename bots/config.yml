@@ -1,0 +1,20 @@
+# Configure queries for the scheduled CourtListener bot.
+# You can add more entries under `queries`.
+# Each entry supports:
+# - name: a short label
+# - q: the search query string
+# - max_results: optional, default 10
+# - create_issue: true/false (whether to open a GitHub Issue for new hits)
+#
+# Example query syntax is similar to CourtListener search. See:
+# https://www.courtlistener.com/api/rest-info
+
+queries:
+  - name: Takoda
+    q: "Takoda OR Takoda Institute OR American Indian OIC"
+    max_results: 5
+    create_issue: true
+  - name: Concepts26
+    q: "Concepts 26 OR Concepts26"
+    max_results: 5
+    create_issue: true
