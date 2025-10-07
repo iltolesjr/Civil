@@ -4,6 +4,10 @@ This repository contains case management tools and documentation for civil court
 
 ## 📅 Quick Links - Court Dates & Deadlines
 
+### 🔥 **[UPCOMING DATES SUMMARY](UPCOMING_DATES_SUMMARY.md)** ⭐
+**START HERE** - Quick answer to "When are my court dates?" with immediate action steps.
+
+### Additional Resources:
 - **[Court Calendar](Court_Calendar.md)** - View all upcoming court dates and deadlines
 - **[Case Status Tracker](Case_Status_Tracker.md)** - Track status of all active and closed cases
 - **[How to Check Court Dates](How_to_Check_Court_Dates.md)** - Step-by-step guide to checking court dates online, by phone, or in person
