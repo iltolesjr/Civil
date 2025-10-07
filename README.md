@@ -31,6 +31,12 @@ This repository contains case management tools and documentation for civil court
 
 ## 🛠️ Case Management Tools
 
+### Court Date Tracking Scripts
+- **[Show_Court_Dates.ps1](Show_Court_Dates.ps1)** - PowerShell script to display upcoming court dates (Windows)
+- **[show_court_dates.sh](show_court_dates.sh)** - Bash script to display upcoming court dates (Linux/Mac)
+
+Run these scripts anytime to quickly see your court date status!
+
 ### Conversation & Communication Tools
 - **[Master Conversation Organizer](Master_Conversation_Organizer.ps1)** - PowerShell script to organize conversations
 - **[Conversation Transcription Tool](Conversation_Transcription_Tool.ps1)** - Tool for transcribing conversations
