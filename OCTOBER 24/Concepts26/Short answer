@@ -1,0 +1,226 @@
+Short answer: yep—I read your files and then mapped your facts to MN consumer-fraud / misrep principles and the classic “as-is doesn’t excuse concealment” carve-outs. I pulled details from your uploads (the Craigslist email thread, your affidavit draft, and the claims template) and organized them as exhibits.
+
+What I read (from your actual files):
+
+* The Craigslist “2004 Lexus RX” email thread between you and the seller (dates + post link).
+* Your affidavit draft stating inability to pay filing fees.
+* Your Statement of Claims template (plaintiff/defendant slots + damages sections).
+
+Below is a practical playbook to make your own MCP server + VS Code agent do the same thing—**and actually fetch the docs and treat the Statement of Claims as the “source of truth.”**
+
+# 1) Project layout (local folder the agent will scan)
+
+```
+case/
+  source/
+    Jeff_Mills_Statement_of_Claims.txt
+    Jeff_Mills_Affidavit_of_Inability_to_Pay.txt
+    Gmail_-_2004_Lexus_RX.pdf
+    ...other exhibits...
+  outputs/
+    packet_draft.md
+    packet_final.pdf
+  servers/
+    case-tools/   (your MCP server code lives here)
+```
+
+# 2) Tell VS Code to run your MCP server
+
+In VS Code → Settings (JSON):
+
+```json
+{
+  "mcpServers": {
+    "case-tools": {
+      "command": "node",
+      "args": ["./servers/case-tools/dist/index.js"],
+      "env": {
+        "CASE_ROOT": "${workspaceFolder}/case"
+      }
+    }
+  }
+}
+```
+
+Now the VS Code Chat / agent can call your custom “case-tools” MCP tools.
+
+# 3) Minimal MCP server (TypeScript) that actually pulls files
+
+Expose a few dead-simple tools the model can call:
+
+* `list_case_files()` → returns file names under `${CASE_ROOT}/source`
+* `read_document(path)` → returns raw text; auto-OCR PDFs to text
+* `extract_claims()` → reads `Jeff_Mills_Statement_of_Claims.txt` and returns structured fields (parties, dollar amounts, timeline)
+* `save_packet(markdown)` → writes to `outputs/packet_draft.md`
+
+**Skeleton:**
+
+```ts
+// servers/case-tools/src/index.ts
+import { createServer, Tool } from "@modelcontextprotocol/sdk/server";
+import fs from "fs/promises";
+import path from "path";
+import pdfParse from "pdf-parse"; // or pdfjs/pdf2json
+
+const CASE_ROOT = process.env.CASE_ROOT || process.cwd();
+const SRC = path.join(CASE_ROOT, "source");
+const OUT = path.join(CASE_ROOT, "outputs");
+
+const list_case_files: Tool = {
+  name: "list_case_files",
+  description: "List files in the case/source directory.",
+  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  handler: async () => {
+    const files = await fs.readdir(SRC);
+    return { files };
+  },
+};
+
+const read_document: Tool = {
+  name: "read_document",
+  description: "Read a document from case/source. Handles .txt/.pdf.",
+  inputSchema: { type: "object", properties: { filename: { type: "string" } }, required: ["filename"] },
+  handler: async ({ filename }) => {
+    const full = path.join(SRC, filename);
+    const buf = await fs.readFile(full);
+    if (filename.toLowerCase().endsWith(".pdf")) {
+      const parsed = await pdfParse(buf);
+      return { text: parsed.text };
+    }
+    return { text: buf.toString("utf8") };
+  },
+};
+
+const extract_claims: Tool = {
+  name: "extract_claims",
+  description: "Parse Statement_of_Claims to structured data.",
+  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  handler: async () => {
+    const claimPath = path.join(SRC, "Jeff_Mills_Statement_of_Claims.txt");
+    const text = await fs.readFile(claimPath, "utf8");
+    // naive extraction—upgrade later with a small regex/LLM pass
+    const parties = {
+      plaintiff: /Plaintiff:\s*(.+)/i.exec(text)?.[1]?.trim(),
+      defendant: /Defendant:\s*(.+)/i.exec(text)?.[1]?.trim()
+    };
+    const amount = /Amount.*?:\s*\$?([\d,\.]+)/i.exec(text)?.[1]?.trim();
+    return { text, parties, amount };
+  },
+};
+
+const save_packet: Tool = {
+  name: "save_packet",
+  description: "Save markdown packet to outputs/packet_draft.md",
+  inputSchema: { type: "object", properties: { markdown: { type: "string" } }, required: ["markdown"] },
+  handler: async ({ markdown }) => {
+    await fs.mkdir(OUT, { recursive: true });
+    const p = path.join(OUT, "packet_draft.md");
+    await fs.writeFile(p, markdown, "utf8");
+    return { saved: p };
+  },
+};
+
+const server = createServer({ name: "case-tools", version: "0.1.0" });
+server.tool(list_case_files);
+server.tool(read_document);
+server.tool(extract_claims);
+server.tool(save_packet);
+server.start();
+```
+
+Build/run:
+
+```bash
+cd servers/case-tools
+npm init -y
+npm i @modelcontextprotocol/sdk pdf-parse
+# add tsconfig, compile to dist, then run via VS Code's MCP config
+```
+
+# 4) Give the agent a “house style” system prompt
+
+Tell the VS Code agent **how** to think and what to prioritize:
+
+```
+SYSTEM PROMPT FOR CASE AGENT
+
+You are a paralegal assistant. Treat Jeff_Mills_Statement_of_Claims.txt as the SINGLE SOURCE OF TRUTH for parties, timeline, and amounts. 
+Before drafting, call:
+1) list_case_files
+2) read_document("Jeff_Mills_Statement_of_Claims.txt")
+3) read_document for each likely exhibit (pdf/txt)
+4) extract_claims
+
+Then:
+- Rename exhibits as: Exhibit A, B, C… using descriptive titles based on contents.
+- Build an Argument section that maps facts → Minnesota law (fraud, misrepresentation, UCC §2-316 limits on as-is; consumer fraud act).
+- Cite exhibits inline as [Exhibit A], etc. DO NOT invent facts that are not in the files.
+- Output a single markdown packet ready for filing.
+- Finally, call save_packet with the markdown.
+```
+
+# 5) Example “user” instruction inside VS Code chat
+
+```
+Create my conciliation court packet. Scope all facts from the Statement of Claims, then attach supporting details from the email PDF and the affidavit. 
+Label and summarize each exhibit. Draft arguments focusing on misrepresentation, code-clearing concealment, and apparent authority at the business premises.
+Target claim: $5,000 (refund + incidentals). 
+```
+
+# 6) How it ends up pulling docs (the call pattern)
+
+The agent will (and should) do something like:
+
+1. `list_case_files` → sees `Jeff_Mills_...Claims.txt`, `Gmail_-_2004_Lexus_RX.pdf`, `Jeff_Mills_Affidavit_...txt`
+2. `read_document("Jeff_Mills_Statement_of_Claims.txt")` → extracts names/amounts/timeline
+3. `read_document("Gmail_-_2004_Lexus_RX.pdf")` → gets the email text for dates/offers (the thing I cited above).
+4. `read_document("Jeff_Mills_Affidavit_of_Inability_to_Pay.txt")` → pulls the affidavit language.
+5. Drafts markdown with exhibits + argument and calls `save_packet`.
+
+# 7) Guardrails that make it reliable
+
+* **“Source-of-truth” rule:** Always privilege the Statement of Claims text over memory. (You can even add a tool `assert_in_claims(fact)` that fails if a fact isn’t found there.)
+* **No hallucinated exhibits:** Only cite files returned by `list_case_files`.
+* **Deterministic formatting:** Provide a markdown template (cover page → facts → legal standards → application → prayer for relief → exhibit list).
+* **Validation tool (optional):** Add a `validate_packet()` tool that checks that every [Exhibit X] mentioned is present in `/source`.
+
+# 8) Tiny markdown template (what `save_packet` will receive)
+
+```md
+# Jeff Mills v. [Defendant]
+## Conciliation Court Packet
+
+### Statement of Facts (scoped from Claims)
+[bullet facts pulled verbatim from Statement_of_Claims]
+
+### Legal Standards (Minnesota)
+- Consumer Fraud Act (misrepresentation / concealment)
+- UCC 2-316 limits on “as-is”
+- Apparent authority on business premises (corporate liability)
+
+### Application to Facts
+- Code clearing → active concealment → defeats as-is
+- Ownership/authority misrep (title in son’s name)
+- Transaction on business property → apparent authority
+
+### Damages
+- Refund $3,700
+- Diagnostics/repairs $X
+- Incidentals $Y
+- Total claim request: ≤ court limit
+
+### Exhibits
+- **Exhibit A** — 2004 Lexus RX Email Thread (offer/acceptance timeline). 
+- **Exhibit B** — Affidavit of Inability to Pay (fee waiver).
+- **Exhibit C** — Mechanic diagnostics and code history (concealment).
+- etc.
+```
+
+---
+
+## Why my answer looked fast + “trained”
+
+* I didn’t “train” anything live; I **read your uploaded files** (those citations above) and used a fixed legal playbook for used-car fraud cases in MN.
+* The MCP setup above lets *your* agent do that reading every time, on-demand, with the **Statement of Claims as scope**. No guesswork, no stale memory.
+
+If you want, I can also drop a ready-to-paste `package.json`, `tsconfig.json`, and a stricter `extract_claims()` that pulls amounts/dates/locations with regexes.
